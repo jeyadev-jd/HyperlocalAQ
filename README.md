@@ -6,7 +6,7 @@
 
 This software was developed for a research paper submitted to the Journal of Open Source Software (JOSS). The paper and its associated files can be found in the `/paper` directory of this repository.
 
-![Example Map](paper/map_screenshot.png)
+![Example Map](map.png)
 
 ## Statement of Need
 
