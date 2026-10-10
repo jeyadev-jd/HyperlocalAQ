@@ -1,0 +1,17 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+type: software
+title: "HyperlocalAQ: Multi-Source Air Quality Modeling for Chennai"
+abstract: "High-resolution air quality modeling framework integrating 7 APIs (WAQI, NASA FIRMS, Open-Meteo, TomTom, OSM, CAMS, OpenFDA) with hybrid IDW modeling, fire-impact and traffic adjustments, visualized on an interactive Folium map."
+authors:
+  - family-names: "R"
+    given-names: "Jeyadev"
+    email: "jeyadev2006@gmail.com"
+    affiliation: "Sri Ramachandra Institute of Higher Education and Research"
+repository-code: "https://github.com/jeyadev-jd/HyperlocalAQ"
+url: "https://jeyadev.dev/projects/hyperlocalaq"
+keywords:
+  - "Python"
+  - "Folium"
+  - "IDW Modeling"
+date-released: "2026-10-10"
