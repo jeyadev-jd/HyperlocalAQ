@@ -110,13 +110,28 @@ analyse other places.
 
 ---
 
+## Tests
+
+```bash
+pip install -r requirements.txt -r requirements-dev.txt
+python -m pytest tests
+```
+
+The tests cover the WAQI unit conversion and the stale-station guard.
+
+---
+
 ## Status and known limitations
 
 This is a **prototype** built for an ideathon. It has not been validated against measurements, so no accuracy
 is claimed. Known limitations:
 
-- **Units.** WAQI station values (`iaqi`) are on the AQI scale, while CAMS values are concentrations in ug/m3.
-  The prototype blends them directly, so blended values are not physically meaningful.
+- **Units (fixed, with caveats).** WAQI station values are EPA AQI sub-indices, not concentrations. They are now
+  converted back to concentrations with the EPA breakpoints before blending with CAMS. This is an approximation:
+  EPA averaging periods (24 h for particulates, 8 h for ozone and CO) are applied to WAQI's own feed, and the PM2.5
+  table was revised in 2024 (select with `HYPERLOCALAQ_PM25_TABLE=2024` or `pre2024`). In a test with identical
+  inputs, the conversion lowered the map's AQI range from 73-281 to 62-169; values still exceed the stations'
+  readings because the static multipliers below inflate them.
 - **CAMS weight.** CAMS is treated as a pseudo-station at an assumed distance of 15 km. The CAMS grid is much
   coarser than a neighbourhood.
 - **Static multipliers.** The weather, fire, OpenStreetMap-source and traffic factors are hand-chosen constants,

@@ -85,6 +85,56 @@ AQI_CONFIG = {
 
 
 # ==============================================================================
+# WAQI UNIT CONVERSION
+# WAQI publishes station values on the US EPA AQI scale ("iaqi" = individual AQI), not as
+# concentrations. They are converted back to concentrations (ug/m3; CO in mg/m3) with the EPA
+# breakpoints before being blended with CAMS values, which are concentrations.
+# Approximations: EPA AQI uses averaging periods (24 h PM, 8 h O3 and CO) that WAQI applies to
+# its own feed; the PM2.5 table was revised in 2024 and the one in use is selectable.
+# ==============================================================================
+_EPA_PM25_2024 = [(0.0, 9.0, 0, 50), (9.1, 35.4, 51, 100), (35.5, 55.4, 101, 150),
+                  (55.5, 125.4, 151, 200), (125.5, 225.4, 201, 300), (225.5, 500.4, 301, 500)]
+_EPA_PM25_PRE2024 = [(0.0, 12.0, 0, 50), (12.1, 35.4, 51, 100), (35.5, 55.4, 101, 150),
+                     (55.5, 150.4, 151, 200), (150.5, 250.4, 201, 300), (250.5, 500.4, 301, 500)]
+EPA_BREAKPOINTS = {  # (conc_low, conc_high, aqi_low, aqi_high); native EPA units
+    'pm25': _EPA_PM25_2024 if os.environ.get("HYPERLOCALAQ_PM25_TABLE", "2024") == "2024" else _EPA_PM25_PRE2024,
+    'pm10': [(0, 54, 0, 50), (55, 154, 51, 100), (155, 254, 101, 150),
+             (255, 354, 151, 200), (355, 424, 201, 300), (425, 604, 301, 500)],        # ug/m3
+    'no2': [(0, 53, 0, 50), (54, 100, 51, 100), (101, 360, 101, 150),
+            (361, 649, 151, 200), (650, 1249, 201, 300), (1250, 2049, 301, 500)],       # ppb
+    'so2': [(0, 35, 0, 50), (36, 75, 51, 100), (76, 185, 101, 150),
+            (186, 304, 151, 200), (305, 604, 201, 300), (605, 1004, 301, 500)],         # ppb
+    'o3': [(0.0, 0.054, 0, 50), (0.055, 0.070, 51, 100), (0.071, 0.085, 101, 150),
+           (0.086, 0.105, 151, 200), (0.106, 0.200, 201, 300), (0.201, 0.604, 301, 500)],  # ppm
+    'co': [(0.0, 4.4, 0, 50), (4.5, 9.4, 51, 100), (9.5, 12.4, 101, 150),
+           (12.5, 15.4, 151, 200), (15.5, 30.4, 201, 300), (30.5, 50.4, 301, 500)],       # ppm
+}
+_MOLAR_MASS = {'no2': 46.0055, 'so2': 64.066, 'o3': 48.0, 'co': 28.01}
+_MOLAR_VOLUME = 24.45  # L/mol at 25 C and 1 atm
+
+
+def epa_aqi_to_concentration(pollutant, aqi):
+    """EPA AQI sub-index -> concentration in ug/m3 (CO in mg/m3). Returns NaN if not convertible."""
+    table = EPA_BREAKPOINTS.get(pollutant)
+    if table is None or aqi is None or pd.isna(aqi) or aqi < 0:
+        return np.nan
+    aqi = min(float(aqi), table[-1][3])
+    native = np.nan
+    for c_lo, c_hi, i_lo, i_hi in table:
+        if aqi <= i_hi:
+            lo = i_lo if aqi >= i_lo else aqi  # values in the small gap between two bands
+            native = c_lo + (c_hi - c_lo) * (aqi - lo) / (i_hi - lo) if i_hi > lo else c_lo
+            break
+    if pd.isna(native) or pollutant in ('pm25', 'pm10'):
+        return native
+    if pollutant in ('no2', 'so2'):                       # ppb -> ug/m3
+        return native * _MOLAR_MASS[pollutant] / _MOLAR_VOLUME
+    if pollutant == 'o3':                                 # ppm -> ug/m3
+        return native * 1000.0 * _MOLAR_MASS['o3'] / _MOLAR_VOLUME
+    return native * _MOLAR_MASS['co'] / _MOLAR_VOLUME     # co: ppm -> mg/m3
+
+
+# ==============================================================================
 # STEP 2: DEFINE HELPER FUNCTIONS
 # ==============================================================================
 
@@ -139,7 +189,10 @@ def fetch_waqi_data(station_urls, pollutants):
                     'longitude': data["data"]["city"]["geo"][1],
                     'aqi': data["data"].get("aqi", np.nan)
                 }
-                for p in pollutants: row[p] = iaqi.get(p, {}).get('v', np.nan)
+                for p in pollutants:
+                    reported = iaqi.get(p, {}).get('v', np.nan)
+                    row[f'{p}_reported_aqi'] = reported
+                    row[p] = epa_aqi_to_concentration(p, reported)  # concentration, not an index
                 station_data.append(row)
         except requests.exceptions.RequestException:
             print(f"  ❌ Failed to fetch data for {station_id}")
