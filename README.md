@@ -77,13 +77,27 @@ This framework relies on several external APIs. Obtain your own free keys and pr
 variables. They are never stored in the code, and the script stops with a clear message if one is missing.
 
 ```bash
-export WAQI_API_TOKEN="your_waqi_token"
-export NASA_FIRMS_API_KEY="your_firms_key"
-export TOMTOM_API_KEY="your_tomtom_key"
+export WAQI_API_TOKEN="your_waqi_token"          # required
+export NASA_FIRMS_API_KEY="your_firms_key"       # required (free)
 # optional: neighbourhood CSV (columns Zone, Location, Category, Latitude, Longitude)
 export HYPERLOCALAQ_NEIGHBORHOOD_CSV="/path/to/chennai-area.csv"
+# optional: live traffic. Without it the traffic adjustment is simply off.
+export TOMTOM_API_KEY="your_tomtom_key"
 python "chennai area air quality.py"
 ```
+
+OpenStreetMap pollution sources are fetched from the free Overpass API and need no key. (Overpass Turbo is the
+web interface to the same service; the script queries the API directly.) Very large queries can time out on the
+public server, in which case the script continues without OSM sources.
+
+**Traffic modes** (`HYPERLOCALAQ_TRAFFIC`):
+
+| Mode | Behaviour |
+|---|---|
+| `auto` (default) | TomTom live flow if `TOMTOM_API_KEY` is set, otherwise no traffic adjustment |
+| `tomtom` | live TomTom flow; stops if the key is missing |
+| `synthetic` | a time-of-day demonstration proxy, labelled **SYNTHETIC** in the console and on the map; it is not measured traffic and is meant only to demonstrate the pipeline |
+| `none` | traffic adjustment off |
 
 A template is in `.env.example`. Do not commit real keys.
 
@@ -100,6 +114,8 @@ is claimed. Known limitations:
   coarser than a neighbourhood.
 - **Static multipliers.** The weather, fire, OpenStreetMap-source and traffic factors are hand-chosen constants,
   not calibrated. The weather factors compare each point with the mean of all points.
+- **Traffic.** Optional. Without a traffic source the adjustment is off; the synthetic mode is a demonstration
+  proxy, not data, and results produced with it must not be presented as measured traffic effects.
 - **Live data.** Station feeds can be stale; check the timestamp of each station before interpreting the map.
 
 A leave-one-station-out validation protocol and a data-driven correction are being developed as follow-up work.

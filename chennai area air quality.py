@@ -21,7 +21,10 @@ def _require_env(name):
 
 WAQI_API_TOKEN = _require_env("WAQI_API_TOKEN")
 NASA_FIRMS_API_KEY = _require_env("NASA_FIRMS_API_KEY")
-TOMTOM_API_KEY = _require_env("TOMTOM_API_KEY")
+# TomTom is OPTIONAL. Traffic is one adjustment among several; the framework runs without it.
+TOMTOM_API_KEY = os.environ.get("TOMTOM_API_KEY", "").strip()
+# Traffic mode: "auto" (TomTom if a key is set, otherwise none), "tomtom", "synthetic" or "none".
+TRAFFIC_MODE = os.environ.get("HYPERLOCALAQ_TRAFFIC", "auto").strip().lower()
 # CSV with columns Zone, Location, Category, Latitude, Longitude. Defaults to the script's folder.
 NEIGHBORHOOD_CSV_PATH = os.environ.get("HYPERLOCALAQ_NEIGHBORHOOD_CSV", "chennai-area.csv")
 
@@ -242,6 +245,49 @@ def fetch_tomtom_traffic_data(neighborhood_df, api_key, radius_meters):
     return pd.DataFrame(traffic_data)
 
 
+TRAFFIC_NOT_USED = "not used"
+TRAFFIC_SYNTHETIC = "SYNTHETIC time-of-day demo, not measured traffic"
+
+
+def synthetic_traffic_data(neighborhood_df):
+    """Clearly labelled demonstration proxy: congestion from the local hour only (IST).
+    It is NOT measured traffic. Use it to demonstrate the pipeline without a traffic API."""
+    from datetime import datetime, timedelta, timezone
+    hour = (datetime.now(timezone.utc) + timedelta(hours=5, minutes=30)).hour
+    if 7 <= hour <= 10:
+        level = 0.50
+    elif 17 <= hour <= 20:
+        level = 0.55
+    elif 11 <= hour <= 16:
+        level = 0.25
+    else:
+        level = 0.08
+    return pd.DataFrame({'Location': neighborhood_df['Location'], 'traffic_congestion': level})
+
+
+def get_traffic_data(neighborhood_df):
+    """Return (traffic_df, source_label) according to TRAFFIC_MODE. Never silently invents data."""
+    mode = TRAFFIC_MODE
+    if mode == "auto":
+        mode = "tomtom" if TOMTOM_API_KEY else "none"
+    if mode == "tomtom":
+        if not TOMTOM_API_KEY:
+            raise SystemExit("HYPERLOCALAQ_TRAFFIC=tomtom needs the TOMTOM_API_KEY environment variable.")
+        df = fetch_tomtom_traffic_data(neighborhood_df, TOMTOM_API_KEY, TOMTOM_TRAFFIC_RADIUS_METERS)
+        label = "TomTom live flow"
+    elif mode == "synthetic":
+        print("\n⚠️  Traffic mode 'synthetic': using a time-of-day demonstration proxy, NOT measured traffic.")
+        df, label = synthetic_traffic_data(neighborhood_df), TRAFFIC_SYNTHETIC
+    elif mode == "none":
+        print("\nTraffic adjustment disabled (no traffic source configured).")
+        df = pd.DataFrame({'Location': neighborhood_df['Location'], 'traffic_congestion': 0.0})
+        label = TRAFFIC_NOT_USED
+    else:
+        raise SystemExit(f"Unknown HYPERLOCALAQ_TRAFFIC value '{TRAFFIC_MODE}'. Use auto, tomtom, synthetic or none.")
+    df['traffic_source'] = label
+    return df, label
+
+
 def find_n_nearest_stations(neighborhood_df, station_df, n):
     print(f"\nFinding the {n} nearest stations...")
     if station_df.empty:
@@ -393,7 +439,7 @@ def create_map(final_df, waqi_df, firms_df, osm_df):
         popup_html += "<hr><b><u>Live Model Inputs:</u></b><br>"
         popup_html += f"- Weather: {row.get('temperature', 'N/A'):.1f}°C, {row.get('humidity', 'N/A'):.1f}%, {row.get('wind_speed', 'N/A'):.1f} km/h from {row.get('wind_direction', 'N/A')}°<br>"
         if 'traffic_congestion' in row and pd.notna(row['traffic_congestion']):
-            popup_html += f"- Traffic Congestion Index: {row['traffic_congestion']:.2f}<br>"
+            popup_html += f"- Traffic Congestion Index: {row['traffic_congestion']:.2f} ({row.get('traffic_source', 'unknown source')})<br>"
 
         folium.CircleMarker(
             location=[row['Latitude'], row['Longitude']],
@@ -458,7 +504,7 @@ def main():
     meteo_df = fetch_meteo_data(neighborhood_df)
     firms_df = fetch_firms_data(NASA_FIRMS_API_KEY, FIRMS_AREA_BOUNDS)
     osm_df = fetch_osm_pollution_sources(OVERPASS_API_URL, OVERPASS_QUERY)
-    traffic_df = fetch_tomtom_traffic_data(neighborhood_df, TOMTOM_API_KEY, TOMTOM_TRAFFIC_RADIUS_METERS)
+    traffic_df, traffic_label = get_traffic_data(neighborhood_df)
 
     # --- Data Cleaning & Pre-processing ---
     if not waqi_df.empty:
