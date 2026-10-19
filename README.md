@@ -101,6 +101,13 @@ public server, in which case the script continues without OSM sources.
 
 A template is in `.env.example`. Do not commit real keys.
 
+**Neighbourhood file.** `chennai-area.csv` lists 22 Chennai areas (columns `Zone, Location, Category, Latitude,
+Longitude`) so the script runs from a clean clone. Coordinates come from OpenStreetMap through Nominatim
+(© OpenStreetMap contributors, ODbL) and are area centres or landmarks, accurate to roughly 1 to 2 km, not exact
+points. `Zone` is the Greater Chennai Corporation zone as recorded in OpenStreetMap (one area has none recorded).
+`Category` is a rough, hand-assigned land-use label for display only. Replace the file with your own list to
+analyse other places.
+
 ---
 
 ## Status and known limitations
