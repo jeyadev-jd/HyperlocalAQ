@@ -33,7 +33,7 @@ The core methodology is as follows:
     *   **Static Sources:** It queries **OpenStreetMap** for nearby industrial zones, power plants, landfills, and major highways, applying a capped adjustment factor based on proximity.
     *   **Dynamic Traffic:** It fetches real-time traffic congestion data from the **TomTom API** and adjusts traffic-related pollutants like NO₂ and CO based on current road conditions.
 
-The final output is a robust, scientifically-grounded estimate of air quality at a neighborhood scale.
+The output is an indicative neighbourhood-scale estimate of air quality; see "Status and known limitations" below.
 
 ### System Architecture
 
@@ -47,8 +47,8 @@ To run `HyperlocalAQ`, you will need Python 3.8+ and Git.
 1.  **Clone the Repository**
     Open your terminal and clone this repository to your local machine:
     ```bash
-    git clone https://github.com/your-username/hyperlocal-aq-model.git
-    cd hyperlocal-aq-model
+    git clone https://github.com/jeyadev-jd/HyperlocalAQ.git
+    cd HyperlocalAQ
     ```
 
 2.  **Set Up a Virtual Environment (Recommended)**
@@ -73,15 +73,36 @@ To run `HyperlocalAQ`, you will need Python 3.8+ and Git.
 
 ## Configuration: API Keys
 
-This framework relies on several external APIs. You must obtain your own free API keys and add them to the script.
+This framework relies on several external APIs. Obtain your own free keys and provide them as environment
+variables. They are never stored in the code, and the script stops with a clear message if one is missing.
 
-Open the `aqi_model.py` file and update the following lines with your keys:
+```bash
+export WAQI_API_TOKEN="your_waqi_token"
+export NASA_FIRMS_API_KEY="your_firms_key"
+export TOMTOM_API_KEY="your_tomtom_key"
+# optional: neighbourhood CSV (columns Zone, Location, Category, Latitude, Longitude)
+export HYPERLOCALAQ_NEIGHBORHOOD_CSV="/path/to/chennai-area.csv"
+python "chennai area air quality.py"
+```
 
-```python
-# --- API & File Configuration ---
-WAQI_API_TOKEN = "YOUR_WAQI_TOKEN_HERE"
-NASA_FIRMS_API_KEY = "YOUR_FIRMS_KEY_HERE"
-TOMTOM_API_KEY = "YOUR_TOMTOM_KEY_HERE"
+A template is in `.env.example`. Do not commit real keys.
+
+---
+
+## Status and known limitations
+
+This is a **prototype** built for an ideathon. It has not been validated against measurements, so no accuracy
+is claimed. Known limitations:
+
+- **Units.** WAQI station values (`iaqi`) are on the AQI scale, while CAMS values are concentrations in ug/m3.
+  The prototype blends them directly, so blended values are not physically meaningful.
+- **CAMS weight.** CAMS is treated as a pseudo-station at an assumed distance of 15 km. The CAMS grid is much
+  coarser than a neighbourhood.
+- **Static multipliers.** The weather, fire, OpenStreetMap-source and traffic factors are hand-chosen constants,
+  not calibrated. The weather factors compare each point with the mean of all points.
+- **Live data.** Station feeds can be stale; check the timestamp of each station before interpreting the map.
+
+A leave-one-station-out validation protocol and a data-driven correction are being developed as follow-up work.
 
 ---
 

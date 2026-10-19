@@ -11,12 +11,19 @@ from sklearn.metrics.pairwise import haversine_distances
 import math
 
 # --- API & File Configuration ---
-WAQI_API_TOKEN = "da77cadeed5012f680511ebc6714745443487a0d"
-NASA_FIRMS_API_KEY = "c72502e93dc1a16b9c2ceff0c95043fc"
-TOMTOM_API_KEY = "G2IOAmewiav2OQWSPsbMUl2ECnLgtuA5"  # Your TomTom API Key
-# The CSV file should be in the same directory as this script.
-NEIGHBORHOOD_CSV_PATH = '/home/jeyadev/SHIRIHER/chennai-area.csv'
-print("✅ Using hardcoded API Tokens for this test run.")
+def _require_env(name):
+    """Read a secret from the environment. Keys are never stored in the source code."""
+    value = os.environ.get(name, "").strip()
+    if not value:
+        raise SystemExit(f"Missing environment variable {name}. See 'Configuration' in the README.")
+    return value
+
+
+WAQI_API_TOKEN = _require_env("WAQI_API_TOKEN")
+NASA_FIRMS_API_KEY = _require_env("NASA_FIRMS_API_KEY")
+TOMTOM_API_KEY = _require_env("TOMTOM_API_KEY")
+# CSV with columns Zone, Location, Category, Latitude, Longitude. Defaults to the script's folder.
+NEIGHBORHOOD_CSV_PATH = os.environ.get("HYPERLOCALAQ_NEIGHBORHOOD_CSV", "chennai-area.csv")
 
 # --- Model & Pollutant Configuration ---
 POLLUTANTS_TO_ANALYZE = ['pm25', 'pm10', 'o3', 'no2', 'so2', 'co']
@@ -310,7 +317,9 @@ def apply_fire_adjustments(df, firms_df, pollutants):
                 bearing = (math.degrees(math.atan2(math.sin(lon2 - lon1) * math.cos(lat2),
                                                    math.cos(lat1) * math.sin(lat2) - math.sin(lat1) * math.cos(
                                                        lat2) * math.cos(lon2 - lon1))) + 360) % 360
-                if abs(loc_row['wind_direction'] - bearing) <= 45:
+                # smallest angle between the two bearings (handles the 359 / 1 degree wrap)
+                angle_gap = abs(loc_row['wind_direction'] - bearing) % 360
+                if min(angle_gap, 360 - angle_gap) <= 45:
                     total_impact += fire_row['frp'] / (dist_matrix_km[i, j] ** 2)
         for p in pollutants:
             adjustment = 1 + total_impact * FIRE_IMPACT_WEIGHTS.get(p, 0) * FIRE_IMPACT_SCALING_FACTOR
