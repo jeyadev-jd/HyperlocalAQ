@@ -6,7 +6,7 @@ import folium
 import io
 import webbrowser
 import os
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime, timezone
 from sklearn.metrics.pairwise import haversine_distances
 import math
 
@@ -33,6 +33,8 @@ POLLUTANTS_TO_ANALYZE = ['pm25', 'pm10', 'o3', 'no2', 'so2', 'co']
 POLLUTANT_API_MAP = {'pm25': 'pm2_5', 'pm10': 'pm10', 'o3': 'ozone', 'no2': 'nitrogen_dioxide',
                      'so2': 'sulphur_dioxide', 'co': 'carbon_monoxide'}
 N_NEAREST_STATIONS = 3
+# Station readings older than this are ignored, never shown as live.
+MAX_STATION_AGE_HOURS = float(os.environ.get("HYPERLOCALAQ_MAX_STATION_AGE_HOURS", "6"))
 CAMS_DATA_EQUIVALENT_DISTANCE_KM = 15.0
 MAX_OSM_ADJUSTMENT_FACTOR = 2.0
 
@@ -121,6 +123,15 @@ def fetch_waqi_data(station_urls, pollutants):
             response.raise_for_status()
             data = response.json()
             if data.get("status") == "ok":
+                observed = data["data"].get("time", {}).get("iso")
+                try:
+                    age_h = (datetime.now(timezone.utc) - datetime.fromisoformat(observed)).total_seconds() / 3600
+                except (TypeError, ValueError):
+                    age_h = float('inf')  # no usable timestamp: treat as stale
+                if age_h > MAX_STATION_AGE_HOURS:
+                    print(f"  ⚠️  Ignoring stale station {data['data']['city']['name'][:40]}: "
+                          f"last update {observed or 'unknown'}")
+                    continue
                 iaqi = data["data"].get("iaqi", {})
                 row = {
                     'station_name': data["data"]["city"]["name"],
@@ -201,7 +212,8 @@ def fetch_osm_pollution_sources(url, query):
     print("\nFetching static pollution sources from OpenStreetMap (Overpass API)...")
     try:
         response = requests.post(url, data=query, timeout=180,
-                                 headers={'Content-Type': 'application/x-www-form-urlencoded'})
+                                 headers={'Content-Type': 'application/x-www-form-urlencoded',
+                                          'User-Agent': 'HyperlocalAQ/1.0 (research prototype; github.com/jeyadev-jd/HyperlocalAQ)'})
         response.raise_for_status()
         data, sources = response.json(), []
         for el in data.get('elements', []):
@@ -425,7 +437,7 @@ def calculate_overall_aqi(row):
 def create_map(final_df, waqi_df, firms_df, osm_df):
     """Creates the final map with all data layers and detailed pop-ups."""
     print("\nGenerating final interactive AQI map...")
-    m = folium.Map(location=[13.0827, 80.2707], zoom_start=11, tiles="CartoDB positron")
+    m = folium.Map(location=[13.0827, 80.2707], zoom_start=11, tiles="OpenStreetMap")
 
     # Neighborhood Layer with AQI colors
     for _, row in final_df.iterrows():

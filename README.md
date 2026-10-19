@@ -123,7 +123,9 @@ is claimed. Known limitations:
   not calibrated. The weather factors compare each point with the mean of all points.
 - **Traffic.** Optional. Without a traffic source the adjustment is off; the synthetic mode is a demonstration
   proxy, not data, and results produced with it must not be presented as measured traffic effects.
-- **Live data.** Station feeds can be stale; check the timestamp of each station before interpreting the map.
+- **Live data.** Station readings older than `HYPERLOCALAQ_MAX_STATION_AGE_HOURS` (default 6) are ignored and
+  reported on the console. If every station is stale, the map is built from CAMS, weather, fire and OpenStreetMap
+  data only, which is much less reliable than station-anchored estimates.
 
 A leave-one-station-out validation protocol and a data-driven correction are being developed as follow-up work.
 
